@@ -35,11 +35,11 @@ class Game {
     this.numberOfQuestions = 0;
     this.maxNumberOfQuestions = noOfQuestions;
     this.fileName = '';
-    this.admin = this._getIdFromMsg(msg);
+    this.admin = Game._getIdFromMsg(msg);
 
     return new Promise((resolve, reject) => {
       this.voiceChannel.join()
-        .then(connection => {
+        .then((connection) => {
           this.connection = connection;
           return this.spotify.getTracks();
         })
@@ -49,27 +49,26 @@ class Game {
           resolve();
         })
         .catch(e => reject(e));
-    })
+    });
   }
 
   start(msg) {
-    if(this._isAdmin(msg)) {
+    if (this._isAdmin(msg)) {
       this._nextQuestion();
     }
   }
 
   end(msg, terminate) {
-    if(!terminate) {
-      this._play(__dirname + '/winner.mp3');
-      this.sendMessage('The winner was: @' + this._getWinner().name);
+    if (!terminate) {
+      this._play(`${__dirname}/winner.mp3`);
+      this.sendMessage(`The winner was: @${this._getWinner().name}`);
       this.sendMessage(this._generateStanding());
     }
 
-    if(terminate && !this._isAdmin(msg)) {
+    if (terminate && !this._isAdmin(msg)) {
       return;
-    } else {
-      this.sendMessage('Stopping..');
     }
+    this.sendMessage('Stopping..');
 
     this.client.clearInterval(this.clueInterval);
     this.client.clearInterval(this.durationInterval);
@@ -83,7 +82,7 @@ class Game {
   }
 
   _nextQuestion() {
-    if(this.numberOfQuestions >= this.maxNumberOfQuestions) {
+    if (this.numberOfQuestions >= this.maxNumberOfQuestions) {
       this.end();
       return;
     }
@@ -92,58 +91,58 @@ class Game {
     this.clueIndex = 0;
     this.correctGuess = false;
     this.timesPlayedTrack = 1;
-    this.numberOfQuestions++;
+    this.numberOfQuestions += 1;
 
     if (this.clueInterval) {
       this.client.clearInterval(this.clueInterval);
     }
 
-    if(this.durationInterval) {
+    if (this.durationInterval) {
       this.client.clearInterval(this.durationInterval);
     }
 
     const standings = this._generateStanding();
-    if(standings !== '') {
+    if (standings !== '') {
       this.sendMessage(standings);
     }
 
     console.log('starting track', this.currentTrack);
-    this._saveTrack(this.currentTrack)
+    Game._saveTrack(this.currentTrack)
       .then((file) => {
         this.duration = file.duration;
         this._play(file.fileName);
       })
       .catch(e => console.log(e));
 
-      this.durationInterval = this.client.setInterval(() => {
-        this.currentTime = new Date().getTime();
+    this.durationInterval = this.client.setInterval(() => {
+      this.currentTime = new Date().getTime();
 
-        const elapsed = this.currentTime - this.accessTime;
+      const elapsed = this.currentTime - this.accessTime;
 
-        if (elapsed >= this.duration && !this.correctGuess) {
-          console.log('should replay!');
-          if (this.timesPlayedTrack === 1) {
-            this.client.setTimeout(() => {
-              if (!this.correctGuess) {
-                this._play(this.fileName);
-                this.timesPlayedTrack++;
-              }
-            }, 2000);
-          } else {
-            this._nextQuestionWrong();
-          }
-        }
-      }, 3000);
-    
-      this.clueInterval = this.client.setInterval(() => {
-        const clue = this._getClue();
-        if(clue === this.currentTrack.name) {
-          this._nextQuestionWrong();
+      if (elapsed >= this.duration && !this.correctGuess) {
+        console.log('should replay!');
+        if (this.timesPlayedTrack === 1) {
+          this.client.setTimeout(() => {
+            if (!this.correctGuess) {
+              this._play(this.fileName);
+              this.timesPlayedTrack += 1;
+            }
+          }, 2000);
         } else {
-          console.log('clue', clue);
-          this.sendMessage(`Here is a clue: \`${clue}\``);
+          this._nextQuestionWrong();
         }
-      }, 7500);
+      }
+    }, 3000);
+
+    this.clueInterval = this.client.setInterval(() => {
+      const clue = this._getClue();
+      if (clue === this.currentTrack.name) {
+        this._nextQuestionWrong();
+      } else {
+        console.log('clue', clue);
+        this.sendMessage(`Here is a clue: \`${clue}\``);
+      }
+    }, 7500);
   }
 
   _nextQuestionWrong() {
@@ -162,9 +161,10 @@ class Game {
       return;
     }
 
-    const userId = msg.author.id;
-    const username = msg.author.username;
-    this._addUser({ id: userId, name: username, points: 0 });
+    const { id: userId, username } = msg.author;
+    this._addUser({
+      id: userId, name: username, points: 0,
+    });
 
     const theGuess = guess.toLowerCase();
     const theAnswer = this.currentTrack.name.toLowerCase();
@@ -172,7 +172,7 @@ class Game {
     let treshold;
     if (theAnswer.length >= 22) {
       treshold = 0.61;
-    } else if(theAnswer.length >= 12) {
+    } else if (theAnswer.length >= 12) {
       treshold = 0.74;
     } else {
       treshold = 1;
@@ -180,7 +180,7 @@ class Game {
 
     const result = score(theAnswer, theGuess, fuzzy);
 
-    if(result >= treshold) {
+    if (result >= treshold) {
       this.correctGuess = true;
       this._stop();
 
@@ -192,7 +192,6 @@ class Game {
       this.client.setTimeout(() => {
         this._nextQuestion();
       }, 5000);
-
     } else {
       msg.reply('That is WRONG! Terrible guess');
     }
@@ -202,39 +201,43 @@ class Game {
     if (!this.users.has(user.id)) {
       this.users.set(user.id, user);
     }
-    return;
   }
 
   _addPointsToUser(userId, points) {
-    const user = {...this.users.get(userId)};
+    const user = {
+      ...this.users.get(userId),
+    };
     user.points += points;
     this.users.set(userId, user);
   }
 
   _generateTrack() {
-    const random = Math.floor(Math.random() * (this.tracks.length - 0) + 0);
+    const random = Math.floor(Math.random() * (this.tracks.length));
     const track = this.tracks[random];
     this.tracks.splice(random, 1);
     console.log('tracks.length', this.tracks.length);
     return track;
   }
 
-  _saveTrack(track) {
-    return new Promise((resolve, reject) => {
+  static _saveTrack(track) {
+    return new Promise((resolve) => {
       const fileName = `${__dirname}/mp3/current.mp3`;
       const file = fs.createWriteStream(fileName);
 
-      https.get(track.preview + '.mp3', function (response) {
+      https.get(`${track.preview}.mp3`, (response) => {
         response.pipe(file);
         file.on('finish', () => {
           file.close(() => {
             mp3Duration(fileName, (err, duration) => {
-              resolve({fileName, duration: (duration*1000)});
+              resolve({
+                fileName,
+                duration: (duration * 1000),
+              });
             });
           });
-        })
+        });
       });
-    })
+    });
   }
 
   _play(fileName) {
@@ -243,7 +246,7 @@ class Game {
     this.fileName = fileName;
     this.dispatcher = this.connection.playBroadcast(this.broadcast);
     this.dispatcher.setVolume(0.5);
-  };
+  }
 
   _stop() {
     this.dispatcher.end();
@@ -260,23 +263,21 @@ class Game {
 
   _getClue() {
     const answer = this.currentTrack.name;
-    this.clueIndex++;
+    this.clueIndex += 1;
 
     let clue = '';
 
-    for (let i = 0; i < answer.length; i++) {
+    for (let i = 0; i < answer.length; i += 1) {
       const character = answer[i];
       if (i < this.clueIndex) {
         clue += character;
         if (character === ' ') {
-          this.clueIndex++;
+          this.clueIndex += 1;
         }
+      } else if (character === ' ') {
+        clue += ' ';
       } else {
-        if (character === ' ') {
-          clue += ' ';
-        } else {
-          clue += '●';
-        }
+        clue += '●';
       }
     }
     return clue;
@@ -285,8 +286,8 @@ class Game {
   _getWinner() {
     let max = 0;
     let user;
-    this.users.forEach((value, key) => {
-      if(value.points > max) {
+    this.users.forEach((value) => {
+      if (value.points > max) {
         max = value.points;
         user = value;
       }
@@ -295,20 +296,18 @@ class Game {
   }
 
   _generateStanding() {
-    let users = [];
+    const users = [];
 
-    if(this.users.size > 0) {
-      this.users.forEach((value, key) => {
-        if(value.points > 0) {
+    if (this.users.size > 0) {
+      this.users.forEach((value) => {
+        if (value.points > 0) {
           users.push(value);
         }
       });
     }
 
     if (users.length > 0) {
-      const sorted = users.sort((a, b) => {
-        return a.points > b.points ? -1 : 1;
-      });
+      const sorted = users.sort((a, b) => (a.points > b.points ? -1 : 1));
 
       let standing = '```css\n === STANDINGS ===\n';
       sorted.forEach((val, idx) => {
@@ -327,12 +326,12 @@ class Game {
     }
   }
 
-  _getIdFromMsg(msg) {
+  static _getIdFromMsg(msg) {
     return msg.author.id;
   }
 
   _isAdmin(msg) {
-    return this._getIdFromMsg(msg) === this.admin;
+    return Game._getIdFromMsg(msg) === this.admin;
   }
 }
 
