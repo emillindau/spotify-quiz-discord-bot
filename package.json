@@ -4,7 +4,7 @@
   "description": "Show current PUBG session in Discord",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "./node_modules/.bin/eslint index.js game.js"
   },
   "author": "Emil Lindau",
   "license": "ISC",
@@ -17,5 +17,13 @@
     "node-opus": "^0.2.7",
     "spotify-web-api-node": "^2.5.0",
     "string-score": "^1.0.1"
+  },
+  "devDependencies": {
+    "eslint": "^4.17.0",
+    "eslint-config-airbnb": "^16.1.0",
+    "eslint-config-airbnb-base": "^12.1.0",
+    "eslint-plugin-import": "^2.8.0",
+    "eslint-plugin-jsx-a11y": "^6.0.3",
+    "eslint-plugin-react": "^7.6.1"
   }
 }
