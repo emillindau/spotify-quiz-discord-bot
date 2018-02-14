@@ -1,0 +1,7 @@
+config.prod.json
+secret.js
+*.zip
+*.mp3
+node_modules
+test
+.DS_Store

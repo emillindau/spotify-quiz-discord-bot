@@ -1,0 +1,21 @@
+{
+  "name": "pubg-bot",
+  "version": "1.0.0",
+  "description": "Show current PUBG session in Discord",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Emil Lindau",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^0.17.1",
+    "discord.js": "^11.3.0",
+    "ffmpeg": "0.0.4",
+    "ffmpeg-binaries": "^3.2.2-3",
+    "mp3-duration": "^1.1.0",
+    "node-opus": "^0.2.7",
+    "spotify-web-api-node": "^2.5.0",
+    "string-score": "^1.0.1"
+  }
+}

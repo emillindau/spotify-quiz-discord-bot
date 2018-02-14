@@ -1,0 +1,12 @@
+{
+  "discord": {
+    "token": "",
+    "voiceChannel": "Quiz",
+    "textChannel": "quiz"
+  },
+  "spotify": {
+    "playlist": "",
+    "clientId": "",
+    "clientSecret": ""
+  }
+}
