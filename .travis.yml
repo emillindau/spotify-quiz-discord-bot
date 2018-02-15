@@ -1,3 +1,26 @@
 language: node_js
 node_js:
- - "node"
+ - node
+ addons:
+  ssh_known_hosts:
+  - 174.138.11.19
+branches:
+  only:
+  - master
+env:
+  global:
+  - REMOTE_APP_DIR=/var/bot/
+  - REMOTE_USER=deploy
+  - REMOTE_HOST=174.138.11.19
+before_install:
+- npm install -g npm@^2
+- openssl aes-256-cbc -K $encrypted_14dfe625469c_key -iv $encrypted_14dfe625469c_iv
+  -in deploy.enc -out deploy -d
+install:
+- npm install --only=dev
+before_script:
+- chmod 600 deploy && mv deploy ~/.ssh/id_rsa
+script:
+- npm run build
+after_success:
+- "./scripts/deploy.sh"
