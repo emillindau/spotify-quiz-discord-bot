@@ -17,7 +17,7 @@ env:
   - secure: N5kXeFVNlNVV1Jy8TJMviCT3tUtDYSyXDQyziEbv6PIuhN/zYjFbufbkCwKpyJAV+YSzZf+hL007kRyLH6SdzM8/J5hYdnZaR1rpe7mo5bGhYmwSahqlN4QzfrUZ0HQBUCyP07SOG+3ip+nvPHx+/68AXfMd+E79qfK612cgz0almgfKhhjDJTUzetcIu9Imp926VV1mjSEtGX9WvfIvBM04M2b1lAmjmjp5poEfZ4hqy95NSokzVwuPOE0IjP9J+jifZQpsWvJVYdk/XLw5n2bQt+T/pQdQhHHe4aTaK354ieqV9e+c+0YNN4S7n5WT0DKJiuAOoboZOiFDdmNkDWG0zZzi+HZaF0ZPoENc/dBcCKvJP3ul+em9zGAVV8qi25z6OHzVjPaAw+jVJfGM/OGn0Cp3fi5lr7uZzQ8VOSG9Y1OhFLg4Yhw9EMIWdM8226j3BqcgAyGH9CtW6k4CZlUX4TCpZm6moVzVSX5O8rkfVVf7xquMCaUuACT7xGTKeVEH2y+0AV/KhLeAioSiK4cNVRHP5QWQo3WrbU9MsNb3LLi50VSNV43oLJzGQkq1a5VgncRg8yDLyrg3GlUIuxhj368TfWvIwPh/ojZHsXlPx0+l8RZ1Is15FCKOPzj7YHLJuR1XR5MS2ikQUz7yWvn4AnjxNDM/gFKxoN6YNgg=
 before_install:
 - openssl aes-256-cbc -K $encrypted_14dfe625469c_key -iv $encrypted_14dfe625469c_iv
-  -in deploy.enc -out deploy -d
+  -in deploy-key.enc -out deploy-key -d
 install:
 - npm install --only=dev
 before_script:
