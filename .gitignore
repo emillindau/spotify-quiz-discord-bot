@@ -1,7 +1,8 @@
-config.prod.json
+config.prod.js
 secret.js
 *.zip
-*.mp3
+streamed.mp3
+current.mp3
 node_modules
 test
 .DS_Store
