@@ -1,6 +1,6 @@
 language: node_js
 node_js:
- - node
+ - "node"
  addons:
   ssh_known_hosts:
   - 174.138.11.19
