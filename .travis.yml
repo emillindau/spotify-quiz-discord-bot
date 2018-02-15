@@ -20,8 +20,6 @@ before_install:
   -in deploy-key.enc -out deploy-key -d
 install:
 - npm install --only=dev
-before_script:
-- chmod 600 deploy && mv deploy ~/.ssh/id_rsa
 script:
 - npm run build
 after_success:
