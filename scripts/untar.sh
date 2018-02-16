@@ -20,7 +20,12 @@ checkpm2
 cd /var/bot/ && \
 pm2 stop index || echo Already stopped && \
 tar zxvf package.tgz -C . && \
-mv build/* . && \
-mkdir mp3 && \
+mv build/* .
+
+if [ ! -d mp3 ]; then
+  # Control will enter here if $DIRECTORY doesn't exist.
+  mkdir mp3
+fi
+
 npm install && \
 pm2 start /var/bot/index.js
