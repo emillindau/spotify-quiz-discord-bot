@@ -17,5 +17,6 @@ cd /var/bot/ && \
 pm2 stop index || echo Already stopped && \
 tar zxvf package.tgz -C . && \
 mv build/* . && \
+mkdir mp3 && \
 npm install && \
 pm2 start /var/bot/index.js
