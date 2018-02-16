@@ -3,6 +3,10 @@ set -x
 
 export NODE_ENV=production
 
+curl -o- https://raw.githubusercontent.com/creationix/nvm/v0.33.8/install.sh | bash
+nvm install v8.5.0
+nvm use v8.5.0
+
 checkpm2() {
     if hash pm2 2>/dev/null; then
         echo pm2 exists
