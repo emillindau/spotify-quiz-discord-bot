@@ -1,5 +1,5 @@
 const SpotifyWebApi = require('spotify-web-api-node');
-const config = require('./config.js');
+const config = require('./config.json');
 
 class Spotify {
   constructor() {

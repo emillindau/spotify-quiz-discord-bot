@@ -18,4 +18,4 @@ pm2 stop index || echo Already stopped && \
 tar zxvf package.tgz -C . && \
 mv build/* . && \
 npm install && \
-pm2 start index.js
+pm2 start /var/bot/index.js
