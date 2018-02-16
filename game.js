@@ -62,7 +62,10 @@ class Game {
     if (!terminate) {
       this._play(`${__dirname}/winner.mp3`);
       this.sendMessage(`The winner was: @${this._getWinner().name}`);
-      this.sendMessage(this._generateStanding());
+      const standing = this._generateStanding();
+      if (standing && standing !== '') {
+        this.sendMessage(standing);
+      }
     }
 
     if (terminate && !this._isAdmin(msg)) {
@@ -139,7 +142,6 @@ class Game {
       if (clue === this.currentTrack.name) {
         this._nextQuestionWrong();
       } else {
-        console.log('clue', clue);
         this.sendMessage(`Here is a clue: \`${clue}\``);
       }
     }, 7500);
@@ -154,6 +156,22 @@ class Game {
     this.client.setTimeout(() => {
       this._nextQuestion();
     }, 5000);
+  }
+
+  forceNext(msg, cb) {
+    if (this._isAdmin(msg)) {
+      this.sendMessage(`Okey then.\nThe answer was ${this.currentTrack.artist} - ${this.currentTrack.name}`);
+
+      this.sendMessage('Time for next song instead (cowards)!');
+      this._stop();
+      this.correctGuess = true;
+      this.client.setTimeout(() => {
+        this._nextQuestion();
+        cb();
+      }, 5000);
+    } else {
+      cb();
+    }
   }
 
   guess(guess, msg) {
@@ -219,7 +237,6 @@ class Game {
     const random = Math.floor(Math.random() * (this.tracks.length));
     const track = this.tracks[random];
     this.tracks.splice(random, 1);
-    console.log('tracks.length', this.tracks.length);
     return track;
   }
 
@@ -296,7 +313,9 @@ class Game {
         user = value;
       }
     });
-    return user;
+    return user || {
+      name: 'Nobody',
+    };
   }
 
   _generateStanding() {

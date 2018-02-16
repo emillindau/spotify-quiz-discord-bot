@@ -20,7 +20,8 @@ const _generateHelpBlock = () => (
   '- Commands -\n' +
   '* anna play (int) - Initiate play session with optional max questions parameter\n' +
   '* anna start - Start the Quiz\n' +
-  '* anna stop - Stops the Quiz\n' +
+  '* anna stop (admin) - Stops the Quiz\n' +
+  '* anna next (admin) - Skips to next song\n' +
   '* anna guess (your guess) - Guess on current song. Or just type\n' +
   '* anna help - Generates this page\n' +
   '* anna status - Show current status\n\n' +
@@ -106,6 +107,15 @@ const handleActions = (action, cons, msg) => {
       break;
     case 'status':
       sendMsg(`Current status is **${currentStatus}**`);
+      break;
+    case 'next':
+      if (currentStatus === 'started') {
+        currentStatus = 'next';
+        game.forceNext(msg, () => {
+          // Switch back.
+          currentStatus = 'started';
+        });
+      }
       break;
     default:
       break;

@@ -20,12 +20,19 @@ class Spotify {
       // Retrieve an access token.
       this.spotifyApi.clientCredentialsGrant()
         .then((data) => {
-          this.expiresTime = data.body['expires_in'] * 1000;
-          this.accessTime = new Date().getTime();
+          if (data.body && data.body.access_token) {
+            this.expiresTime = data.body.expires_in * 1000;
+            this.accessTime = new Date().getTime();
+            console.log('setting expiresTime', this.expiresTime);
+            console.log('setting accessTime', this.accessTime);
 
-          // Save the access token so that it's used in future calls
-          this.spotifyApi.setAccessToken(data.body['access_token']);
-          resolve();
+            // Save the access token so that it's used in future calls
+            this.spotifyApi.setAccessToken(data.body.access_token);
+            resolve();
+          } else {
+            console.log('Something went wrong', data);
+            reject();
+          }
         }, (err) => {
           console.log('Something went wrong when retrieving an access token', err);
           reject();
@@ -36,8 +43,9 @@ class Spotify {
   _checkTime() {
     this.currentTime = new Date().getTime();
     const elapsed = this.currentTime - this.accessTime;
-    if((elapsed + 5000) >= this.expirestime) {
-      return getAccess();
+    if ((elapsed + 5000) >= this.expirestime) {
+      console.log('Time expired fetching new');
+      return this.getAccess();
     }
     return Promise.resolve();
   }
