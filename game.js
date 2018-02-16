@@ -185,10 +185,14 @@ class Game {
       this._stop();
 
       msg.reply(`That is indeed correct! The answer was ${this.currentTrack.artist} - ${this.currentTrack.name}. 10p to Slytherin!`);
-
-      this.sendMessage('Next song!');
-
       this._addPointsToUser(userId, 10);
+
+      if (this.numberOfQuestions >= this.maxNumberOfQuestions) {
+        this._nextQuestion();
+        return;
+      }
+
+      this.sendMessage('Next song coming up!');
       this.client.setTimeout(() => {
         this._nextQuestion();
       }, 5000);

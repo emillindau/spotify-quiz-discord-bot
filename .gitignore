@@ -1,5 +1,7 @@
 config.prod.js
 config.prod.json
+config.json
+config.dev.json
 secret.js
 *.zip
 streamed.mp3
