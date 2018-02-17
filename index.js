@@ -1,19 +1,114 @@
 const Discord = require('discord.js');
+const { promisify } = require('util');
+const redis = require('redis');
 const config = require('./config.json');
 const Game = require('./game');
 
 const client = new Discord.Client();
+const rClient = redis.createClient();
+const getAsync = promisify(rClient.hget).bind(rClient);
 let game;
 
 let currentStatus = 'none';
+// rClient.set('testKey', 'testVal', redis.print);
+// getAsync('testKey').then((res) => {
+//   console.log('res', res);
+// });
+// rClient.del('twist');
+
+async function test() {
+  const name = await getAsync('twist', 'name');
+  const points = await getAsync('twist', 'points');
+  const timesPlayed = await getAsync('twist', 'timesPlayed');
+  console.log('name', name);
+  console.log('points', points);
+  console.log('timesPLayed', timesPlayed);
+}
+test();
 
 process.on('exit', () => {
   client.destroy();
+  rClient.quit();
 });
 
 process.on('SIGINT', () => {
   process.exit(0);
 });
+
+const getAllPlayers = () => (
+  new Promise((resolve, reject) => {
+    rClient.hkeys('names', async (err, replies) => {
+      if (replies && replies.length > 0) {
+        console.log('replies', replies);
+        const players = replies.map(async (reply) => {
+          const name = await getAsync(reply, 'name');
+          const points = await getAsync(reply, 'points');
+          const timesPlayed = await getAsync(reply, 'timesPlayed');
+          return {
+            name,
+            points,
+            timesPlayed,
+          };
+        });
+        Promise.all(players)
+          .then(p => resolve(p));
+      } else {
+        resolve([]);
+      }
+    });
+  })
+);
+
+const getOffset = (value, total) => {
+  const { length } = value;
+  const offset = total - length;
+  let result = `${value}`;
+  for (let i = 0; i < offset; i += 1) {
+    result += ' ';
+  }
+  return result;
+};
+
+const getHighscore = () => (
+  new Promise((resolve, reject) => {
+    getAllPlayers()
+      .then((players) => {
+        const sorted = players.sort((a, b) => (a.points > b.points ? -1 : 1));
+        let standing = '```css\n === WORLD RANKING ===\n';
+        standing += 'Pos. Name       | Points       | Times played       | Avg points\n';
+
+        sorted.forEach((val, idx) => {
+          standing += `  ${idx + 1}. ${getOffset(val.name, 11)}| ${getOffset(val.points, 13)}| ${getOffset(val.timesPlayed, 19)}| ${getOffset(Math.floor(val.points / val.timesPlayed), 0)}\n`;
+        });
+
+        standing += '```';
+        resolve(standing);
+      });
+  })
+);
+
+const saveResult = async (users) => {
+  if (users.size > 0) {
+    users.forEach(async (u) => {
+      const name = await getAsync(u.name, 'name');
+      const points = await getAsync(u.name, 'points');
+      const timesPlayed = await getAsync(u.name, 'timesPlayed');
+      if (!name) {
+        rClient.hset(u.name, 'name', u.name);
+        rClient.hset(u.name, 'points', u.points);
+        rClient.hset(u.name, 'timesPlayed', 1);
+        rClient.hset('names', u.name, true);
+      } else {
+        const p = Number(points) + Number(u.points);
+        const tp = Number(timesPlayed) + 1;
+        rClient.hset(u.name, 'points', p);
+        rClient.hset(u.name, 'timesPlayed', tp);
+      }
+    });
+  }
+};
+
+rClient.on('error', err => console.log('Redis error', err));
 
 const _generateHelpBlock = () => (
   '```css\n===== HELP =====\n\n' +
@@ -117,6 +212,12 @@ const handleActions = (action, cons, msg) => {
         });
       }
       break;
+    case 'ranking':
+      getHighscore()
+        .then((res) => {
+          sendMsg(res);
+        });
+      break;
     default:
       break;
   }
@@ -127,8 +228,9 @@ client.on('ready', () => {
   client.user.setActivity('Quiz Bot!');
 
   const broadcast = client.createVoiceBroadcast();
-  game = new Game(broadcast, client, () => {
+  game = new Game(broadcast, client, (users) => {
     currentStatus = 'none';
+    saveResult(users);
   });
 });
 

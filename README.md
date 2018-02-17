@@ -5,3 +5,6 @@
 ![alt text](https://i.imgur.com/yu4QE3q.png)
 ![alt text](http://i.imgur.com/EOKFoMf.jpg)
 ![alt text](https://i.imgur.com/R6Cbkt5.png)
+
+## ToDo
+* Points depending on how fast you are

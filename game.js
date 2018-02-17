@@ -80,7 +80,7 @@ class Game {
       this._stop();
       this._exit();
       this.voiceChannel.leave();
-      this.onEnd();
+      this.onEnd(this.users);
     }, 5000);
   }
 
