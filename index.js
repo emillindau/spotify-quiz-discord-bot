@@ -10,6 +10,7 @@ const getAsync = promisify(rClient.hget).bind(rClient);
 let game;
 
 let currentStatus = 'none';
+const SUPER_ADMIN_ID = '98453471065284608';
 
 process.on('exit', () => {
   client.destroy();
@@ -20,6 +21,31 @@ process.on('SIGINT', () => {
   process.exit(0);
 });
 
+const ratingCalc = (user) => {
+  const {
+    points,
+    timesPlayed,
+    firstPlaces,
+    avgScorePerQuestion,
+  } = user;
+
+  let percentage = 0;
+  if (firstPlaces !== 0 && timesPlayed !== 0) {
+    if (firstPlaces === timesPlayed) {
+      percentage = 100;
+    } else if (firstPlaces === 0) {
+      percentage = 0;
+    } else {
+      const p = (timesPlayed / firstPlaces) * 100;
+      const result = ((p / 100) - 1).toFixed(2);
+      percentage = 100 * result;
+    }
+  }
+  const scalar = (100 + avgScorePerQuestion) / 100;
+  const finalRating = (points + percentage) * scalar;
+  return finalRating.toFixed(2);
+};
+
 const getAllPlayers = () => (
   new Promise((resolve, reject) => {
     rClient.hkeys('names', async (err, replies) => {
@@ -28,12 +54,26 @@ const getAllPlayers = () => (
           const name = await getAsync(reply, 'name');
           const points = await getAsync(reply, 'points');
           const timesPlayed = await getAsync(reply, 'timesPlayed');
+          const firstPlaces = await getAsync(reply, 'firstPlaces');
+          const avgScorePerQuestion = await getAsync(reply, 'scorePerQuestion');
+
+          const rating = ratingCalc({
+            points: Number(points),
+            timesPlayed: Number(timesPlayed),
+            firstPlaces: Number(firstPlaces),
+            avgScorePerQuestion: Number(avgScorePerQuestion),
+          });
+
           return {
             name,
-            points,
-            timesPlayed,
+            rating,
+            points: Number(points),
+            timesPlayed: Number(timesPlayed),
+            firstPlaces: Number(firstPlaces),
+            avgScorePerQuestion: Number(avgScorePerQuestion),
           };
         });
+
         Promise.all(players)
           .then(p => resolve(p));
       } else {
@@ -43,10 +83,26 @@ const getAllPlayers = () => (
   })
 );
 
+const _clearAll = () => {
+  return new Promise((resolve, reject) => {
+    rClient.hkeys('names', (err, replies) => {
+      if (err) {
+        reject(err);
+      }
+      if (replies && replies.length > 0) {
+        replies.forEach(reply => rClient.del(reply));
+        rClient.del('names');
+      }
+      resolve();
+    });
+  });
+};
+
 const getOffset = (value, total) => {
-  const { length } = value;
+  const strVal = String(value);
+  const { length } = strVal;
   const offset = total - length;
-  let result = `${value}`;
+  let result = `${strVal}`;
   for (let i = 0; i < offset; i += 1) {
     result += ' ';
   }
@@ -57,36 +113,63 @@ const getHighscore = () => (
   new Promise((resolve, reject) => {
     getAllPlayers()
       .then((players) => {
-        const sorted = players.sort((a, b) => (a.points > b.points ? -1 : 1));
-        let standing = '```css\n === WORLD RANKING ===\n';
-        standing += 'Pos. Name       | Points       | Times played       | Avg points\n';
+        if (players && players.length > 0) {
+          const sorted = players.sort((a, b) => (a.rating > b.rating ? -1 : 1));
+          let standing = '```css\n === WORLD RANKING ===\n';
+          standing += 'Pos. Name       | Points       | Times played       | Avg points       | Scr/Q       | Rating\n';
 
-        sorted.forEach((val, idx) => {
-          standing += `  ${idx + 1}. ${getOffset(val.name, 11)}| ${getOffset(val.points, 13)}| ${getOffset(val.timesPlayed, 19)}| ${getOffset(Math.floor(val.points / val.timesPlayed), 0)}\n`;
-        });
+          sorted.forEach((val, idx) => {
+            standing += `  ${idx + 1}. ${getOffset(val.name, 11)}| ${getOffset(val.points, 13)}| ${getOffset(val.timesPlayed, 19)}| ${getOffset(Math.floor(val.points / val.timesPlayed), 17)}| ${getOffset(val.avgScorePerQuestion, 12)}| ${getOffset(val.rating, 0)}\n`;
+          });
 
-        standing += '```';
-        resolve(standing);
-      });
+          standing += '```';
+          resolve(standing);
+        } else {
+          resolve('No current rankings');
+        }
+      }).catch(e => console.log(e));
   })
 );
 
 const saveResult = async (users, noOfQuestions) => {
   if (users.size > 0) {
-    users.forEach(async (u) => {
+    let sortedUsers = [];
+    users.forEach(u => sortedUsers.push(u));
+    sortedUsers = sortedUsers.sort((a, b) => (a.points > b.points ? -1 : 1));
+    sortedUsers[0].firstPlace = true;
+
+    sortedUsers.forEach(async (u) => {
       const name = await getAsync(u.name, 'name');
       const points = await getAsync(u.name, 'points');
       const timesPlayed = await getAsync(u.name, 'timesPlayed');
+      const firstPlaces = await getAsync(u.name, 'firstPlaces');
+      const avgScorePerQuestion = await getAsync(u.name, 'scorePerQuestion');
+
       if (!name) {
         rClient.hset(u.name, 'name', u.name);
         rClient.hset(u.name, 'points', u.points);
         rClient.hset(u.name, 'timesPlayed', 1);
+        rClient.hset(u.name, 'scorePerQuestion', Math.floor(Number(u.points) / noOfQuestions));
+        if (u.firstPlace) {
+          rClient.hset(u.name, 'firstPlaces', 1);
+        } else {
+          rClient.hset(u.name, 'firstPlaces', 0);
+        }
         rClient.hset('names', u.name, true);
       } else {
         const p = Number(points) + Number(u.points);
         const tp = Number(timesPlayed) + 1;
+        const avgScore = Math.floor(Number(u.points) / noOfQuestions);
+        const added = avgScore + Number(avgScorePerQuestion);
+        const spq = Math.floor(added / 2);
+        let fp = Number(firstPlaces);
+        if (u.firstPlace) {
+          fp += 1;
+        }
+        rClient.hset(u.name, 'firstPlaces', fp);
         rClient.hset(u.name, 'points', p);
         rClient.hset(u.name, 'timesPlayed', tp);
+        rClient.hset(u.name, 'scorePerQuestion', spq);
       }
     });
   }
@@ -201,7 +284,15 @@ const handleActions = (action, cons, msg) => {
       getHighscore()
         .then((res) => {
           sendMsg(res);
-        });
+        })
+        .catch(e => console.log(e));
+      break;
+    case 'clear':
+      if (msg.author && msg.author.id && msg.author.id === SUPER_ADMIN_ID) {
+        _clearAll()
+          .then(() => sendMsg('Rankings cleared..'))
+          .catch(e => console.log(e));
+      }
       break;
     default:
       break;
