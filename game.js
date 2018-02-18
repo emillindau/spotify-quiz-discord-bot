@@ -80,7 +80,7 @@ class Game {
       this._stop();
       this._exit();
       this.voiceChannel.leave();
-      this.onEnd(this.users);
+      this.onEnd(this.users, this.maxNumberOfQuestions);
     }, 5000);
   }
 
@@ -202,8 +202,9 @@ class Game {
       this.correctGuess = true;
       this._stop();
 
-      msg.reply(`That is indeed correct! The answer was ${this.currentTrack.artist} - ${this.currentTrack.name}. 10p to Slytherin!`);
-      this._addPointsToUser(userId, 10);
+      const score = this._getScore();
+      msg.reply(`That is indeed correct! The answer was ${this.currentTrack.artist} - ${this.currentTrack.name}. ${score}p to Slytherin!`);
+      this._addPointsToUser(userId, score);
 
       if (this.numberOfQuestions >= this.maxNumberOfQuestions) {
         this._nextQuestion();
@@ -280,6 +281,26 @@ class Game {
   _exit() {
     this.broadcast.destroy();
     this.dispatcher.destroy();
+  }
+
+  _getScore() {
+    let scalar = 1;
+    const base = 10;
+    if (this.timesPlayedTrack === 1 || this.timesPlayedTrack === 0) {
+      this.currentTime = new Date().getTime();
+      const elapsed = this.currentTime - this.accessTime;
+      const percentage = 100 - Math.floor((elapsed / this.duration) * 100);
+      if (percentage > 85) {
+        scalar = 1.5;
+      } else if (percentage > 75) {
+        scalar = 1.4;
+      } else if (percentage > 60) {
+        scalar = 1.3;
+      } else if (percentage > 50) {
+        scalar = 1.1;
+      }
+    }
+    return scalar * base;
   }
 
   _getClue() {

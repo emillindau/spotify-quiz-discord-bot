@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "test": "./node_modules/.bin/eslint index.js game.js",
-    "build": "rm -rf ./build && mkdir build && cp game.js ./build/game.js && cp spotify.js ./build/spotify.js && cp index.js ./build/index.js && cp package.json ./build/package.json"
+    "build": "rm -rf ./build && mkdir build && cp game.js ./build/game.js && cp spotify.js ./build/spotify.js && cp index.js ./build/index.js && cp package.json ./build/package.json",
+    "redis-dev": "redis-server /usr/local/etc/redis.conf"
   },
   "author": "Emil Lindau",
   "license": "ISC",

@@ -10,21 +10,6 @@ const getAsync = promisify(rClient.hget).bind(rClient);
 let game;
 
 let currentStatus = 'none';
-// rClient.set('testKey', 'testVal', redis.print);
-// getAsync('testKey').then((res) => {
-//   console.log('res', res);
-// });
-// rClient.del('twist');
-
-async function test() {
-  const name = await getAsync('twist', 'name');
-  const points = await getAsync('twist', 'points');
-  const timesPlayed = await getAsync('twist', 'timesPlayed');
-  console.log('name', name);
-  console.log('points', points);
-  console.log('timesPLayed', timesPlayed);
-}
-test();
 
 process.on('exit', () => {
   client.destroy();
@@ -39,7 +24,6 @@ const getAllPlayers = () => (
   new Promise((resolve, reject) => {
     rClient.hkeys('names', async (err, replies) => {
       if (replies && replies.length > 0) {
-        console.log('replies', replies);
         const players = replies.map(async (reply) => {
           const name = await getAsync(reply, 'name');
           const points = await getAsync(reply, 'points');
@@ -87,7 +71,7 @@ const getHighscore = () => (
   })
 );
 
-const saveResult = async (users) => {
+const saveResult = async (users, noOfQuestions) => {
   if (users.size > 0) {
     users.forEach(async (u) => {
       const name = await getAsync(u.name, 'name');
@@ -115,10 +99,11 @@ const _generateHelpBlock = () => (
   '- Commands -\n' +
   '* anna play (int) - Initiate play session with optional max questions parameter\n' +
   '* anna start - Start the Quiz\n' +
-  '* anna stop (admin) - Stops the Quiz\n' +
-  '* anna next (admin) - Skips to next song\n' +
+  '* anna stop [admin] - Stops the Quiz\n' +
+  '* anna next [admin] - Skips to next song\n' +
   '* anna guess (your guess) - Guess on current song. Or just type\n' +
   '* anna help - Generates this page\n' +
+  '* anna ranking - Display current Highscores\n' +
   '* anna status - Show current status\n\n' +
   '- Rules -\n' +
   '# Guess song by typing\n' +
@@ -228,9 +213,9 @@ client.on('ready', () => {
   client.user.setActivity('Quiz Bot!');
 
   const broadcast = client.createVoiceBroadcast();
-  game = new Game(broadcast, client, (users) => {
+  game = new Game(broadcast, client, (users, noOfQuestions) => {
     currentStatus = 'none';
-    saveResult(users);
+    saveResult(users, noOfQuestions);
   });
 });
 
