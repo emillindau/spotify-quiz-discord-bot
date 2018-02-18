@@ -60,7 +60,7 @@ class Game {
 
   end(msg, terminate) {
     if (!terminate) {
-      this._play(`${__dirname}/winner.mp3`);
+      this._play(`${__dirname}/winner.mp3`, 1.5);
       this.sendMessage(`The winner was: @${this._getWinner().name}`);
       const standing = this._generateStanding();
       if (standing && standing !== '') {
@@ -262,12 +262,13 @@ class Game {
     });
   }
 
-  _play(fileName) {
+  _play(fileName, vol) {
+    const volume = vol || 0.5;
     this.accessTime = new Date().getTime();
     this.broadcast.playFile(fileName);
     this.fileName = fileName;
     this.dispatcher = this.connection.playBroadcast(this.broadcast);
-    this.dispatcher.setVolume(0.5);
+    this.dispatcher.setVolume(volume);
   }
 
   _stop() {
