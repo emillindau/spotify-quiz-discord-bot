@@ -1,16 +1,16 @@
-const fs = require('fs');
-const https = require('https');
-const score = require('string-score');
-const mp3Duration = require('mp3-duration');
-
-const Spotify = require('./spotify');
+import fs from 'fs';
+import https from 'https';
+import mp3Duration from 'mp3-duration';
+import FuzzySet from 'fuzzyset.js';
+import Spotify from './spotify';
+import clueHandler from './clue-handler';
+import isSpecial, { getSpecial } from './specials';
 
 class Game {
-  constructor(broadcast, client, onEnd) {
+  constructor(client, onEnd) {
     this.voiceChannel = null;
     this.textChannel = null;
     this.spotify = new Spotify();
-    this.broadcast = broadcast;
     this.client = client;
     this.onEnd = onEnd;
   }
@@ -37,18 +37,28 @@ class Game {
     this.fileName = '';
     this.admin = Game._getIdFromMsg(msg);
 
+    console.log('Init game');
+
     return new Promise((resolve, reject) => {
-      this.voiceChannel.join()
+      this.voiceChannel
+        .join()
         .then((connection) => {
+          console.log('Got a connection');
           this.connection = connection;
           return this.spotify.getTracks();
         })
-        .then(({ tracks }) => {
+        .then((tracks) => {
           this.tracks = tracks;
-          this.sendMessage('Quiz initialized!');
+
+          const tackar = this.client.guilds.cache
+            .get('688669926457999400')
+            .emojis.cache.get('688671879191461899');
+
+          // eslint-disable-next-line no-useless-escape
+          this.sendMessage(`Quiz initialized! ${tackar}`);
           resolve();
         })
-        .catch(e => reject(e));
+        .catch((e) => reject(e));
     });
   }
 
@@ -110,12 +120,13 @@ class Game {
     }
 
     console.log('starting track', this.currentTrack);
+    clueHandler.reset(this.currentTrack.name);
     Game._saveTrack(this.currentTrack)
       .then((file) => {
         this.duration = file.duration;
         this._play(file.fileName);
       })
-      .catch(e => console.log(e));
+      .catch((e) => console.log(e));
 
     this.durationInterval = this.client.setInterval(() => {
       this.currentTime = new Date().getTime();
@@ -138,17 +149,20 @@ class Game {
     }, 3000);
 
     this.clueInterval = this.client.setInterval(() => {
-      const clue = this._getClue();
-      if (clue === this.currentTrack.name) {
-        this._nextQuestionWrong();
+      const { clue, revealed } = clueHandler.getClue();
+
+      if (!revealed) {
+        this.sendMessage(`Here's a hint: \`${clue}\``);
       } else {
-        this.sendMessage(`Here is a clue: \`${clue}\``);
+        this._nextQuestionWrong();
       }
     }, 7500);
   }
 
   _nextQuestionWrong() {
-    this.sendMessage(`Nobody guessed right.. Sigh. The answer was ${this.currentTrack.artist} - ${this.currentTrack.name}`);
+    this.sendMessage(
+      `Nobody guessed right.. Sigh. The answer was ${this.currentTrack.artist} - ${this.currentTrack.name}`
+    );
 
     this.sendMessage('Time for next song!');
     this._stop();
@@ -160,7 +174,9 @@ class Game {
 
   forceNext(msg, cb) {
     if (this._isAdmin(msg)) {
-      this.sendMessage(`Okey then.\nThe answer was ${this.currentTrack.artist} - ${this.currentTrack.name}`);
+      this.sendMessage(
+        `Okey then.\nThe answer was ${this.currentTrack.artist} - ${this.currentTrack.name}`
+      );
 
       this.sendMessage('Time for next song instead (cowards)!');
       this._stop();
@@ -180,43 +196,55 @@ class Game {
     }
 
     const { id: userId, username } = msg.author;
+
     this._addUser({
-      id: userId, name: username, points: 0,
+      id: userId,
+      name: username,
+      points: 0,
     });
 
-    const theGuess = guess.toLowerCase();
-    const theAnswer = this.currentTrack.name.toLowerCase();
-    const fuzzy = 0.5;
-    let treshold;
-    if (theAnswer.length >= 22) {
-      treshold = 0.61;
-    } else if (theAnswer.length >= 12) {
-      treshold = 0.74;
-    } else {
-      treshold = 1;
-    }
+    const theGuess = guess.toLowerCase().replace(/\s/g, '');
+    const theAnswer = this.currentTrack.name.toLowerCase().replace(/\s/g, '');
 
-    const result = score(theAnswer, theGuess, fuzzy);
-
-    if (result >= treshold) {
-      this.correctGuess = true;
-      this._stop();
-
-      const score = this._getScore();
-      msg.reply(`That is indeed correct! The answer was ${this.currentTrack.artist} - ${this.currentTrack.name}. ${score}p to Slytherin!`);
-      this._addPointsToUser(userId, score);
-
-      if (this.numberOfQuestions >= this.maxNumberOfQuestions) {
-        this._nextQuestion();
-        return;
+    const fuzzyAnswer = FuzzySet([theAnswer]);
+    const result = fuzzyAnswer.get(theGuess);
+    if (result && result.length) {
+      let treshold;
+      if (theAnswer.length >= 22) {
+        treshold = 0.85;
+      } else if (theAnswer.length >= 12) {
+        treshold = 0.95;
+      } else {
+        treshold = 1;
       }
 
-      this.sendMessage('Next song coming up!');
-      this.client.setTimeout(() => {
-        this._nextQuestion();
-      }, 5000);
+      const [actual] = result;
+      const [guessScore] = actual;
+
+      if (guessScore >= treshold) {
+        this.correctGuess = true;
+        this._stop();
+
+        const scoreCalc = this._getScore();
+        msg.reply(
+          `That is indeed correct! The answer was ${this.currentTrack.artist} - ${this.currentTrack.name}. ${scoreCalc}p to Slytherin!`
+        );
+        this._addPointsToUser(userId, scoreCalc);
+
+        if (this.numberOfQuestions >= this.maxNumberOfQuestions) {
+          this._nextQuestion();
+          return;
+        }
+
+        this.sendMessage('Next song coming up!');
+        this.client.setTimeout(() => {
+          this._nextQuestion();
+        }, 5000);
+      } else {
+        msg.reply('That is WRONG! Terrible guess');
+      }
     } else {
-      msg.reply('That is WRONG! Terrible guess');
+      msg.reply('Are you even trying?');
     }
   }
 
@@ -235,9 +263,14 @@ class Game {
   }
 
   _generateTrack() {
-    const random = Math.floor(Math.random() * (this.tracks.length));
+    const random = Math.floor(Math.random() * this.tracks.length);
     const track = this.tracks[random];
     this.tracks.splice(random, 1);
+
+    if (isSpecial(track.uri)) {
+      const res = getSpecial(track.uri);
+      return { ...track, name: res.name, artist: res.artistName };
+    }
     return track;
   }
 
@@ -253,7 +286,7 @@ class Game {
             mp3Duration(fileName, (err, duration) => {
               resolve({
                 fileName,
-                duration: (duration * 1000),
+                duration: duration * 1000,
               });
             });
           });
@@ -265,22 +298,19 @@ class Game {
   _play(fileName, vol) {
     const volume = vol || 0.5;
     this.accessTime = new Date().getTime();
-    this.broadcast.playFile(fileName);
     this.fileName = fileName;
-    this.dispatcher = this.connection.playBroadcast(this.broadcast);
+    this.dispatcher = this.connection.play(this.fileName);
     this.dispatcher.setVolume(volume);
   }
 
   _stop() {
     this.dispatcher.end();
-    this.broadcast.end();
     this.dispatcher.destroy();
     this.client.clearInterval(this.clueInterval);
     this.client.clearInterval(this.durationInterval);
   }
 
   _exit() {
-    this.broadcast.destroy();
     this.dispatcher.destroy();
   }
 
@@ -335,9 +365,11 @@ class Game {
         user = value;
       }
     });
-    return user || {
-      name: 'Nobody',
-    };
+    return (
+      user || {
+        name: 'Nobody',
+      }
+    );
   }
 
   _generateStanding() {
@@ -366,8 +398,7 @@ class Game {
 
   sendMessage(message) {
     if (this.textChannel) {
-      this.textChannel.send(message)
-        .catch(e => console.log(e));
+      this.textChannel.send(message).catch((e) => console.log(e));
     }
   }
 
@@ -380,4 +411,4 @@ class Game {
   }
 }
 
-module.exports = Game;
+export default Game;
