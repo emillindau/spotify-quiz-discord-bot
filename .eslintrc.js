@@ -1,13 +1,14 @@
 module.exports = {
-  extends: 'airbnb-base',
+  extends: ['react-app', 'prettier', 'plugin:node/recommended'],
+  plugins: ['prettier'],
   rules: {
     'no-underscore-dangle': 0,
-    'object-curly-newline': [
-      'error',
-      {
-        ObjectExpression: 'always',
-        ObjectPattern: { multiline: true },
-      },
-    ],
-  },
+    'prettier/prettier': 'error',
+    'no-unused-vars': 'warn',
+    'no-console': 'warn',
+    'func-names': 'off',
+    'no-process-exit': 'off',
+    'object-shorthand': 'off',
+    'class-methods-use-this': 'off'
+  }
 };

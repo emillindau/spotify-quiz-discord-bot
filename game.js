@@ -2,9 +2,12 @@ import fs from 'fs';
 import https from 'https';
 import mp3Duration from 'mp3-duration';
 import FuzzySet from 'fuzzyset.js';
+import ytdl from 'ytdl-core-discord';
 import Spotify from './spotify';
 import clueHandler from './clue-handler';
 import isSpecial, { getSpecial } from './specials';
+import { SUPER_ADMIN_ID } from './index';
+import { searchYoutube } from './services/youtube';
 
 class Game {
   constructor(client, onEnd) {
@@ -15,7 +18,7 @@ class Game {
     this.onEnd = onEnd;
   }
 
-  init({ voiceChannel, textChannel, msg, noOfQuestions }) {
+  async init({ voiceChannel, textChannel, msg, noOfQuestions }) {
     this.voiceChannel = voiceChannel;
     this.textChannel = textChannel;
     this.connection = null;
@@ -36,29 +39,22 @@ class Game {
     this.maxNumberOfQuestions = noOfQuestions;
     this.fileName = '';
     this.admin = Game._getIdFromMsg(msg);
+    this.yeetCounter = 0;
 
     console.log('Init game');
-
-    return new Promise((resolve, reject) => {
-      this.voiceChannel
-        .join()
-        .then((connection) => {
-          console.log('Got a connection');
-          this.connection = connection;
-          return this.spotify.getTracks();
-        })
-        .then((tracks) => {
-          this.tracks = tracks;
-
-          const tackar = this.client.guilds.cache
-            .get('688669926457999400')
-            .emojis.cache.get('688671879191461899');
-
-          // eslint-disable-next-line no-useless-escape
-          this.sendMessage(`Quiz initialized! ${tackar}`);
-          resolve();
-        })
-        .catch((e) => reject(e));
+    return new Promise(async (resolve, reject) => {
+      try {
+        this.connection = await this.voiceChannel.join();
+        this.tracks = await this.spotify.getTracks();
+        const initEmoji = this.client.guilds.cache
+          .get('688669926457999400')
+          .emojis.cache.get('688671879191461899');
+        // eslint-disable-next-line no-useless-escape
+        this.sendMessage(`Quiz initialized! ${initEmoji}`);
+        resolve();
+      } catch (e) {
+        reject(e);
+      }
     });
   }
 
@@ -94,13 +90,13 @@ class Game {
     }, 5000);
   }
 
-  _nextQuestion() {
+  async _nextQuestion() {
     if (this.numberOfQuestions >= this.maxNumberOfQuestions) {
       this.end();
       return;
     }
 
-    this.currentTrack = this._generateTrack();
+    this.currentTrack = await this._generateTrack();
     this.clueIndex = 0;
     this.correctGuess = false;
     this.timesPlayedTrack = 1;
@@ -121,12 +117,30 @@ class Game {
 
     console.log('starting track', this.currentTrack);
     clueHandler.reset(this.currentTrack.name);
-    Game._saveTrack(this.currentTrack)
-      .then((file) => {
+
+    if (!this.currentTrack.preview) {
+      this._nextQuestion();
+    }
+
+    if (this.currentTrack.source === 'spotify') {
+      try {
+        const file = await Game._saveTrack(this.currentTrack);
         this.duration = file.duration;
         this._play(file.fileName);
-      })
-      .catch((e) => console.log(e));
+      } catch (e) {
+        console.log('Something went wrong playing spotify');
+        this._nextQuestion();
+      }
+    } else {
+      this.duration = 120 * 1000;
+
+      try {
+        const res = await ytdl(this.currentTrack.preview);
+        this._play(res);
+      } catch (e) {
+        this._nextQuestion();
+      }
+    }
 
     this.durationInterval = this.client.setInterval(() => {
       this.currentTime = new Date().getTime();
@@ -135,7 +149,10 @@ class Game {
 
       if (elapsed >= this.duration && !this.correctGuess) {
         console.log('should replay!');
-        if (this.timesPlayedTrack === 1) {
+        if (
+          this.timesPlayedTrack === 1 ||
+          this.currentTrack.source !== 'spotify'
+        ) {
           this.client.setTimeout(() => {
             if (!this.correctGuess) {
               this._play(this.fileName);
@@ -190,18 +207,50 @@ class Game {
     }
   }
 
-  guess(guess, msg) {
+  guess(guess, msg, cheatMode) {
+    let cheater = false;
+
+    if (guess === 'yeet') {
+      this.yeetCounter++;
+      if (this.yeetCounter >= 50) {
+        this.yeetCounter = 0;
+        this._nextQuestion();
+        return;
+      }
+    }
+
     if (this.correctGuess) {
       return;
     }
 
     const { id: userId, username } = msg.author;
-
     this._addUser({
       id: userId,
       name: username,
-      points: 0,
+      points: 0
     });
+
+    if (cheatMode && userId === SUPER_ADMIN_ID) {
+      this.correctGuess = true;
+      this._stop();
+
+      const scoreCalc = this._getScore(false);
+      msg.reply(
+        `WOW! YOU ARE INSANELY GOOD! The answer was ${this.currentTrack.artist} - ${this.currentTrack.name}. ${scoreCalc}p to THE CHAMPION!`
+      );
+      this._addPointsToUser(userId, scoreCalc, false);
+
+      if (this.numberOfQuestions >= this.maxNumberOfQuestions) {
+        this._nextQuestion();
+        return;
+      }
+
+      this.sendMessage('Next song coming up!');
+      this.client.setTimeout(() => {
+        this._nextQuestion();
+      }, 5000);
+      return;
+    }
 
     const theGuess = guess.toLowerCase().replace(/\s/g, '');
     const theAnswer = this.currentTrack.name.toLowerCase().replace(/\s/g, '');
@@ -225,10 +274,17 @@ class Game {
         this.correctGuess = true;
         this._stop();
 
-        const scoreCalc = this._getScore();
-        msg.reply(
-          `That is indeed correct! The answer was ${this.currentTrack.artist} - ${this.currentTrack.name}. ${scoreCalc}p to Slytherin!`
-        );
+        const scoreCalc = this._getScore(cheatMode);
+        if (cheatMode) {
+          msg.reply(
+            `What? You beat the cheater.. The answer was ${this.currentTrack.artist} - ${this.currentTrack.name}. ${scoreCalc}p to Gryffindor!`
+          );
+        } else {
+          msg.reply(
+            `That is indeed correct! The answer was ${this.currentTrack.artist} - ${this.currentTrack.name}. ${scoreCalc}p to Slytherin!`
+          );
+        }
+
         this._addPointsToUser(userId, scoreCalc);
 
         if (this.numberOfQuestions >= this.maxNumberOfQuestions) {
@@ -241,10 +297,10 @@ class Game {
           this._nextQuestion();
         }, 5000);
       } else {
-        msg.reply('That is WRONG! Terrible guess');
+        // msg.reply('That is WRONG! Terrible guess');
       }
     } else {
-      msg.reply('Are you even trying?');
+      // msg.reply('Are you even trying?');
     }
   }
 
@@ -256,16 +312,22 @@ class Game {
 
   _addPointsToUser(userId, points) {
     const user = {
-      ...this.users.get(userId),
+      ...this.users.get(userId)
     };
     user.points += points;
     this.users.set(userId, user);
   }
 
-  _generateTrack() {
+  async _generateTrack() {
     const random = Math.floor(Math.random() * this.tracks.length);
     const track = this.tracks[random];
     this.tracks.splice(random, 1);
+
+    if (!track.preview) {
+      const res = await searchYoutube(`${track.artist} ${track.name}`);
+      track.source = 'youtube';
+      track.preview = res;
+    }
 
     if (isSpecial(track.uri)) {
       const res = getSpecial(track.uri);
@@ -275,7 +337,11 @@ class Game {
   }
 
   static _saveTrack(track) {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
+      if (!track.preview) {
+        reject();
+      }
+
       const fileName = `${__dirname}/mp3/current.mp3`;
       const file = fs.createWriteStream(fileName);
 
@@ -286,7 +352,7 @@ class Game {
             mp3Duration(fileName, (err, duration) => {
               resolve({
                 fileName,
-                duration: duration * 1000,
+                duration: duration * 1000
               });
             });
           });
@@ -299,7 +365,8 @@ class Game {
     const volume = vol || 0.5;
     this.accessTime = new Date().getTime();
     this.fileName = fileName;
-    this.dispatcher = this.connection.play(this.fileName);
+    console.log('trying to play', this.fileName);
+    this.dispatcher = this.connection.play(this.fileName, { type: 'opus' });
     this.dispatcher.setVolume(volume);
   }
 
@@ -314,9 +381,9 @@ class Game {
     this.dispatcher.destroy();
   }
 
-  _getScore() {
+  _getScore(cheatMode) {
     let scalar = 1;
-    const base = 10;
+    let base = 10;
     if (this.timesPlayedTrack === 1 || this.timesPlayedTrack === 0) {
       this.currentTime = new Date().getTime();
       const elapsed = this.currentTime - this.accessTime;
@@ -331,29 +398,10 @@ class Game {
         scalar = 1.1;
       }
     }
-    return scalar * base;
-  }
-
-  _getClue() {
-    const answer = this.currentTrack.name;
-    this.clueIndex += 1;
-
-    let clue = '';
-
-    for (let i = 0; i < answer.length; i += 1) {
-      const character = answer[i];
-      if (i < this.clueIndex) {
-        clue += character;
-        if (character === ' ') {
-          this.clueIndex += 1;
-        }
-      } else if (character === ' ') {
-        clue += ' ';
-      } else {
-        clue += '●';
-      }
+    if (cheatMode) {
+      base += 30;
     }
-    return clue;
+    return scalar * base;
   }
 
   _getWinner() {
@@ -367,7 +415,7 @@ class Game {
     });
     return (
       user || {
-        name: 'Nobody',
+        name: 'Nobody'
       }
     );
   }

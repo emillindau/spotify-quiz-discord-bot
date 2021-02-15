@@ -1,11 +1,15 @@
-import client, { getChannels, sendMsg } from './client';
+import { MessageAttachment } from 'discord.js';
+import client, { getChannels, sendMsg, retrieveChannelsFor } from './client';
 import rClient, { saveResult, getAllPlayers, clearAll } from './store';
 import Game from './game';
+import { generateHelpBlock, generateSchedule } from './msg-helpers';
 
 let game;
+let navySealsCopyPasta = false;
 
 let currentStatus = 'none';
-const SUPER_ADMIN_ID = '98453471065284608';
+let cheatMode = false;
+export const SUPER_ADMIN_ID = '98453471065284608';
 
 process.on('exit', () => {
   client.destroy();
@@ -28,64 +32,50 @@ const getOffset = (value, total) => {
 };
 
 const getHighscore = () =>
-  new Promise((resolve, reject) => {
-    getAllPlayers()
-      .then((players) => {
-        if (players && players.length > 0) {
-          const sorted = players.sort((a, b) => (a.rating > b.rating ? -1 : 1));
-          let standing = '```css\n === WORLD RANKING ===\n';
-          standing +=
-            'Pos. Name       | Points       | Times played       | Avg points       | Scr/Q       | Rating\n';
+  new Promise(async (resolve, reject) => {
+    try {
+      const players = await getAllPlayers();
+      if (players && players.length > 0) {
+        const sorted = players
+          .sort((a, b) => (Number(a.rating) > Number(b.rating) ? -1 : 1))
+          .slice(0, 10);
+        let standing = '```css\n === WORLD RANKING by PGS ===\n';
+        standing +=
+          'Pos. Name       | Points       | Times played       | Avg points       | Scr/Q       | Rating\n';
 
-          sorted.forEach((val, idx) => {
-            standing += `  ${idx + 1}. ${getOffset(val.name, 11)}| ${getOffset(
-              val.points,
-              13
-            )}| ${getOffset(val.timesPlayed, 19)}| ${getOffset(
-              Math.floor(val.points / val.timesPlayed),
-              17
-            )}| ${getOffset(val.avgScorePerQuestion, 12)}| ${getOffset(
-              val.rating,
-              0
-            )}\n`;
-          });
+        sorted.forEach((val, idx) => {
+          standing += `  ${
+            idx + 1 > 9 ? idx + 1 : '0' + (idx + 1)
+          }. ${getOffset(val.name, 11)}| ${getOffset(
+            val.points,
+            13
+          )}| ${getOffset(val.timesPlayed, 19)}| ${getOffset(
+            Math.floor(val.points / val.timesPlayed),
+            17
+          )}| ${getOffset(val.avgScorePerQuestion, 12)}| ${getOffset(
+            val.rating,
+            0
+          )}\n`;
+        });
 
-          standing += '```';
-          resolve(standing);
-        } else {
-          resolve('No current rankings');
-        }
-      })
-      .catch((e) => console.log(e));
+        standing += '```';
+        resolve(standing);
+      } else {
+        resolve('No current rankings');
+      }
+    } catch (e) {
+      console.log(e);
+    }
   });
 
-const _generateHelpBlock = () =>
-  '```css\n===== HELP =====\n\n' +
-  '- Commands -\n' +
-  '* wahed play (int) - Initiate play session with optional max questions parameter\n' +
-  '* wahed start - Start the Quiz\n' +
-  '* wahed stop [admin] - Stops the Quiz\n' +
-  '* wahed next [admin] - Skips to next song\n' +
-  '* wahed guess (your guess) - Guess on current song. Or just type\n' +
-  '* wahed help - Generates this page\n' +
-  '* wahed ranking - Display current Highscores\n' +
-  '* wahed status - Show current status\n\n' +
-  '- Rules -\n' +
-  '# Guess song by typing\n' +
-  '# Correct guess gives 10 points\n' +
-  '# Games done when 20 questions are asked\n' +
-  '# Songs are 30s and will be played 2 times\n' +
-  '# Thats it..\n\n' +
-  '===== HELP =====\n' +
-  '```';
-
 const prepareGame = async (msg, cons) => {
-  const { voiceChannel, textChannel } = await getChannels();
+  const channels = await retrieveChannelsFor(msg.channel.guild.id);
+  const { voiceChannel, textChannel } = await getChannels(channels);
 
   if (voiceChannel && textChannel) {
     let noOfQuestions = cons || 20;
-    if (noOfQuestions > 50) {
-      noOfQuestions = 50;
+    if (noOfQuestions > 100) {
+      noOfQuestions = 100;
     } else if (noOfQuestions <= 0) {
       noOfQuestions = 1;
     }
@@ -95,7 +85,7 @@ const prepareGame = async (msg, cons) => {
         voiceChannel,
         textChannel,
         msg,
-        noOfQuestions,
+        noOfQuestions
       });
     } catch (e) {
       console.log('failed to init game', e);
@@ -106,13 +96,12 @@ const prepareGame = async (msg, cons) => {
   return false;
 };
 
-const handleActions = (action, cons, msg) => {
+const handleActions = async (action, cons, msg) => {
   switch (action) {
     case 'play':
       if (currentStatus === 'none') {
-        prepareGame(msg, cons).then(() => {
-          currentStatus = 'play';
-        });
+        await prepareGame(msg, cons);
+        currentStatus = 'play';
       }
       break;
     case 'start':
@@ -123,7 +112,7 @@ const handleActions = (action, cons, msg) => {
       break;
     case 'guess':
       if (currentStatus === 'started') {
-        game.guess(cons, msg);
+        game.guess(cons, msg, cheatMode);
       }
       break;
     case 'stop':
@@ -133,34 +122,47 @@ const handleActions = (action, cons, msg) => {
       }
       break;
     case 'help':
-      sendMsg(_generateHelpBlock());
+      sendMsg(generateHelpBlock(), msg);
       break;
     case 'status':
-      sendMsg(`Current status is **${currentStatus}**`);
+      sendMsg(`Current status is **${currentStatus}**`, msg);
       break;
     case 'next':
       if (currentStatus === 'started') {
         currentStatus = 'next';
-        game.forceNext(msg, () => {
-          // Switch back.
-          currentStatus = 'started';
-        });
+        await game.forceNext(msg);
+        // Switch back.
+        currentStatus = 'started';
       }
       break;
     case 'ranking':
-      getHighscore()
-        .then((res) => {
-          sendMsg(res);
-        })
-        .catch((e) => console.log(e));
+      try {
+        const res = await getHighscore();
+        sendMsg(res, msg);
+      } catch (e) {
+        console.log(e);
+      }
       break;
     case 'clear':
       if (msg.author && msg.author.id && msg.author.id === SUPER_ADMIN_ID) {
-        clearAll()
-          .then(() => sendMsg('Rankings cleared..'))
-          .catch((e) => console.log(e));
+        try {
+          await clearAll();
+          sendMsg('Rankings cleared..', msg);
+        } catch (e) {
+          console.log(e);
+        }
       }
       break;
+    case 'schedule':
+      msg.reply(generateSchedule(), msg);
+      break;
+    case 'son': {
+      const attachment = new MessageAttachment(
+        'https://cdn.discordapp.com/attachments/688669927091208260/694164033414103090/emil_von_lindau.jpg'
+      );
+      msg.channel.send('Papa?', attachment);
+      break;
+    }
     default:
       break;
   }
@@ -177,6 +179,32 @@ client.on('ready', () => {
 });
 
 client.on('message', (msg) => {
+  if (
+    msg.author &&
+    msg.author.id &&
+    msg.author.id === SUPER_ADMIN_ID &&
+    currentStatus === 'started' &&
+    msg.content.includes('↑ ↑ ↓ ↓ ← → ← → B A')
+  ) {
+    // msg.reply('allah ybarek f papa wahed');
+    cheatMode = true;
+    msg.reply(
+      'CHEAT MODE ACTIVATED!!!!!!!!!!!!!!!!! BEAT THE CHEATER AND GET EXTRA POINTS!!!'
+    );
+    setTimeout(() => {
+      cheatMode = false;
+      sendMsg('CHEAT MODE DEACTIVATED!!!');
+    }, 60000 * 2);
+  }
+
+  if (
+    currentStatus !== 'started' &&
+    msg.content.includes('hur mår du') &&
+    !msg.author.bot
+  ) {
+    msg.reply('Mecke bra, hur mår du?');
+  }
+
   const isCorrectChannel = msg.channel.name === 'quiz';
   if (!msg.author.bot && isCorrectChannel) {
     if (msg.content.includes('npm install wahed')) {
@@ -201,6 +229,13 @@ client.on('message', (msg) => {
         // Handle everything as a guess
         if (msg.content && msg.content.length > 0) {
           handleActions('guess', msg.content.toLowerCase(), msg);
+
+          if (msg.content.includes('fuck you') && !navySealsCopyPasta) {
+            navySealsCopyPasta = true;
+            msg.reply(
+              "What the fuck did you just fucking say about me, you little bitch? I'll have you know I graduated top of my class in the Navy Seals, and I've been involved in numerous secret raids on Al-Quaeda, and I have over 300 confirmed kills. I am trained in gorilla warfare and I'm the top sniper in the entire US armed forces. You are nothing to me but just another target. I will wipe you the fuck out with precision the likes of which has never been seen before on this Earth, mark my fucking words. You think you can get away with saying that shit to me over the Internet? Think again, fucker. As we speak I am contacting my secret network of spies across the USA and your IP is being traced right now so you better prepare for the storm, maggot. The storm that wipes out the pathetic little thing you call your life. You're fucking dead, kid. I can be anywhere, anytime, and I can kill you in over seven hundred ways, and that's just with my bare hands. Not only am I extensively trained in unarmed combat, but I have access to the entire arsenal of the United States Marine Corps and I will use it to its full extent to wipe your miserable ass off the face of the continent, you little shit. If only you could have known what unholy retribution your little \"clever\" comment was about to bring down upon you, maybe you would have held your fucking tongue. But you couldn't, you didn't, and now you're paying the price, you goddamn idiot. I will shit fury all over you and you will drown in it. You're fucking dead, kiddo."
+            );
+          }
         }
       }
     }

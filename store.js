@@ -17,14 +17,16 @@ const ratingCalc = (user) => {
     } else if (firstPlaces === 0) {
       percentage = 0;
     } else {
-      const p = (timesPlayed / firstPlaces) * 100;
-      const result = (p / 100 - 1).toFixed(2);
+      const p = (firstPlaces / timesPlayed) * 100;
+      const result = (p / 100).toFixed(2);
       percentage = 100 * result;
     }
   }
-  const scalar = (100 + avgScorePerQuestion) / 100;
-  const finalRating = (10 * percentage * scalar) / 10;
-  return finalRating.toFixed(2);
+  percentage = 1 * percentage === 0 ? 1 : percentage * 1;
+  const pr = (100 + percentage) / 100;
+  const scalar = (100 + avgScorePerQuestion) / 100 + pr;
+  const res = (points / timesPlayed) * scalar;
+  return res.toFixed(2);
 };
 
 export const clearAll = () => {
@@ -109,7 +111,7 @@ export const getAllPlayers = () =>
           });
 
           return {
-            name,
+            name: name.slice(0, 10),
             rating,
             points: Number(points),
             timesPlayed: Number(timesPlayed),

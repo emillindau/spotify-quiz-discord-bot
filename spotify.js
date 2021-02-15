@@ -1,5 +1,7 @@
-const SpotifyWebApi = require('spotify-web-api-node');
-const config = require('./config.json');
+// eslint-disable-next-line node/no-unpublished-import
+import config from './config.json';
+import SpotifyWebApi from 'spotify-web-api-node';
+import { searchYoutube } from './services/youtube';
 
 class Spotify {
   constructor() {
@@ -9,7 +11,7 @@ class Spotify {
 
     this.spotifyApi = new SpotifyWebApi({
       clientId: config.spotify.clientId,
-      clientSecret: config.spotify.clientSecret,
+      clientSecret: config.spotify.clientSecret
     });
 
     this.getAccess();
@@ -58,12 +60,12 @@ class Spotify {
 
     const promises = [];
     const limit = 100;
-    for (let i = 0; i <= 500; i += 100) {
+    for (let i = 0; i <= 800; i += 100) {
       const offset = i;
       promises.push(
         this.spotifyApi.getPlaylistTracks(config.spotify.playlist, {
           offset,
-          limit,
+          limit
         })
       );
     }
@@ -74,15 +76,18 @@ class Spotify {
       data.forEach((playlist) => {
         if (playlist && playlist.body && playlist.body.items) {
           const tunes = playlist.body.items
-            .map((t) => ({
-              uri: t.track.uri,
-              preview: t.track.preview_url,
-              id: t.track.id,
-              artist: t.track.artists[0].name,
-              name: t.track.name,
-              duration: t.track.duration_ms,
-            }))
-            .filter((t) => t.preview);
+            .map((t) => {
+              return {
+                source: 'spotify',
+                uri: t.track.uri,
+                preview: t.track.preview_url,
+                id: t.track.id,
+                artist: t.track.artists[0].name,
+                name: t.track.name,
+                duration: t.track.duration_ms
+              };
+            })
+            .filter((t) => t.name);
           allSongs.push(...tunes);
         }
       });
@@ -92,4 +97,4 @@ class Spotify {
   }
 }
 
-module.exports = Spotify;
+export default Spotify;

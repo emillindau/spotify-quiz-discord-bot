@@ -5,7 +5,7 @@ export default (() => {
 
   const reset = (n1) => {
     asArray = n1.split('');
-    clueArray = asArray.map((s) => (s === ' ' ? ' ' : '♫'));
+    clueArray = asArray.map((s) => (s === ' ' ? ' ' : '●'));
     indexTracker = asArray.reduce((acc, curr, idx) => {
       if (!acc[curr]) {
         acc[curr] = [];
